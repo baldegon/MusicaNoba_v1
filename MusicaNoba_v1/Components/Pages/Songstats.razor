@@ -1,0 +1,96 @@
+﻿@page "/songstats"
+@using MusicaNoba_v1.Services
+@using System.Text.Json
+@inject ISongstatsService songstats
+
+<h3>Songstats (RapidAPI) — Artist Info</h3>
+
+<div class="mb-2">
+    <label>spotify_artist_id</label>
+    <input @bind="spotifyId" class="form-control" placeholder="p.ej. 2h93pZq0e7k5yf4dywlkpM" />
+</div>
+<div class="mb-2">
+    <label>songstats_artist_id (opcional)</label>
+    <input @bind="songstatsId" class="form-control" placeholder="p.ej. vxk62ige" />
+</div>
+
+<button class="btn btn-primary" @onclick="Consultar" disabled="@loading">Consultar</button>
+
+@if (loading)
+{
+    <p>Cargando…</p>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (!string.IsNullOrWhiteSpace(jsonPretty))
+{
+    <h5>Respuesta</h5>
+    <pre style="white-space:pre-wrap">@jsonPretty</pre>
+
+    @if (!string.IsNullOrEmpty(artistName))
+    {
+        <p><strong>Artista:</strong> @artistName</p>
+    }
+    @if (followersTotal is not null)
+    {
+        <p><strong>Seguidores totales:</strong> @followersTotal</p>
+    }
+}
+
+@code {
+    private string spotifyId = "2h93pZq0e7k5yf4dywlkpM"; // Ejemplo
+    private string songstatsId = ""; // opcional
+    private bool loading;
+    private string? jsonPretty;
+    private string? error;
+    private string? artistName;
+    private long? followersTotal;
+
+    private async Task Consultar()
+    {
+        loading = true; error = null; jsonPretty = null;
+        artistName = null; followersTotal = null;
+
+        try
+        {
+            using var doc = await songstats.GetArtistInfoAsync(
+                string.IsNullOrWhiteSpace(spotifyId) ? null : spotifyId,
+                string.IsNullOrWhiteSpace(songstatsId) ? null : songstatsId);
+
+            jsonPretty = System.Text.Json.JsonSerializer.Serialize(
+                doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+            // Heurística simple: intenta extraer nombre y seguidores si existen
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                if (doc.RootElement.TryGetProperty("artist_info", out var ai))
+                {
+                    if (ai.TryGetProperty("title", out var titleEl)) artistName = titleEl.GetString();
+                    else if (ai.TryGetProperty("name", out var nameEl)) artistName = nameEl.GetString();
+                }
+
+                if (doc.RootElement.TryGetProperty("stats", out var stats)
+                    && stats.TryGetProperty("followers_total", out var fEl)
+                    && fEl.TryGetInt64(out var fVal))
+                {
+                    followersTotal = fVal;
+                }
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            error = $"HTTP: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
