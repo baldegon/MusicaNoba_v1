@@ -6,7 +6,10 @@ using System.Threading.Tasks;
 
 namespace MusicaNoba_v1.Models
 {
-    internal class Album
+    public class Album
     {
+        public int IdAlbum { get; set; }
+        public string? Title { get; set; }
+        public string? Year { get; set; }
     }
 }
